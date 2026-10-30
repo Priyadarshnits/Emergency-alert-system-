@@ -1,0 +1,103 @@
+#include <Wire.h>
+#include <TinyGPS++.h>
+#include <HardwareSerial.h>
+#include <MPU6050.h>
+
+MPU6050 mpu;
+TinyGPSPlus gps;
+
+// GPS Serial (UART2)
+HardwareSerial gpsSerial(2);
+// GSM Serial (UART1)
+HardwareSerial gsmSerial(1);
+
+#define BUZZER 25
+#define LED 2
+#define BUTTON 4
+
+float ax, ay, az;
+float threshold = 2.5;   // Adjust after testing
+
+void setup() {
+  Serial.begin(115200);
+
+  // Initialize I2C
+  Wire.begin(21, 22);
+  mpu.initialize();
+
+  // Initialize GPS (RX, TX)
+  gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
+
+  // Initialize GSM (RX, TX)
+  gsmSerial.begin(9600, SERIAL_8N1, 27, 26);
+
+  pinMode(BUZZER, OUTPUT);
+  pinMode(LED, OUTPUT);
+  pinMode(BUTTON, INPUT_PULLUP);
+
+  Serial.println("ESP32 Emergency System Ready");
+}
+
+void loop() {
+
+  // Read acceleration
+  int16_t ax_raw, ay_raw, az_raw;
+  mpu.getAcceleration(&ax_raw, &ay_raw, &az_raw);
+
+  ax = ax_raw / 16384.0;
+  ay = ay_raw / 16384.0;
+  az = az_raw / 16384.0;
+
+  float totalAcc = sqrt(ax*ax + ay*ay + az*az);
+
+  // Accident detection or SOS press
+  if (totalAcc > threshold || digitalRead(BUTTON) == LOW) {
+    triggerEmergency();
+  }
+
+  // Read GPS continuously
+  while (gpsSerial.available()) {
+    gps.encode(gpsSerial.read());
+  }
+}
+
+void triggerEmergency() {
+
+  digitalWrite(LED, HIGH);
+  digitalWrite(BUZZER, HIGH);
+  delay(5000);
+  digitalWrite(BUZZER, LOW);
+
+  String message = "Accident Detected! Location: ";
+
+  if (gps.location.isValid()) {
+    message += String(gps.location.lat(), 6);
+    message += ",";
+    message += String(gps.location.lng(), 6);
+  } else {
+    message += "GPS Not Fixed";
+  }
+
+  sendSMS(message);
+
+  digitalWrite(LED, LOW);
+  delay(15000);  // Avoid multiple SMS
+}
+
+void sendSMS(String text) {
+
+  gsmSerial.println("AT");
+  delay(1000);
+
+  gsmSerial.println("AT+CMGF=1");
+  delay(1000);
+
+  gsmSerial.println("AT+CMGS=\"+91XXXXXXXXXX\"");  // Replace with number
+  delay(1000);
+
+  gsmSerial.print(text);
+  delay(1000);
+
+  gsmSerial.write(26);  // CTRL+Z
+  delay(5000);
+}
