@@ -1,0 +1,35 @@
+
+#include <SoftwareSerial.h>
+
+SoftwareSerial gsm(7, 8); 
+// Arduino RX = 7, TX = 8
+
+void setup() {
+  Serial.begin(9600);
+  gsm.begin(9600);
+
+  Serial.println("Initializing GSM Module...");
+  delay(2000);
+
+  gsm.println("AT");
+  delay(1000);
+
+  gsm.println("AT+CMGF=1");
+  delay(1000);
+
+  Serial.println("GSM Module Ready");
+
+  gsm.println("AT+CMGS=\"+91XXXXXXXXXX\"");
+  delay(1000);
+
+  gsm.print("Emergency Alert! Accident detected.");
+  delay(500);
+
+  gsm.write(26);  // Send SMS
+  delay(3000);
+
+  Serial.println("SMS Sent");
+}
+
+void loop() {
+}
